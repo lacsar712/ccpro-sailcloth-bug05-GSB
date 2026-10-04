@@ -1,5 +1,7 @@
 from rest_framework import serializers
 
+from accounts.models import User
+
 from .models import ClothRoll, DipRun, Loft
 from .rules import can_mark_roll_cured
 
@@ -58,12 +60,31 @@ class ClothRollSerializer(serializers.ModelSerializer):
                 )
             request = self.context.get("request")
             role = getattr(getattr(request, "user", None), "role", None)
-            if role == "admin":
-                raise serializers.ValidationError({"status": "管理员不能把卷标成已固化"})
+            if role != User.ROLE_ADMIN:
+                raise serializers.ValidationError(
+                    {"status": "只有主管才能把布卷标为已固化"}
+                )
             ok, msg = can_mark_roll_cured(roll)
             if not ok:
                 raise serializers.ValidationError({"status": msg})
         return attrs
+
+    def update(self, instance, validated_data):
+        if validated_data.get("status") == ClothRoll.STATUS_CURED:
+            # 原子迁移：只有仍未固化的卷能被这一笔改成已固化。
+            # 并发或重复固化时，后到的一笔更新 0 行，按失败处理。
+            moved = (
+                ClothRoll.objects.filter(pk=instance.pk)
+                .exclude(status=ClothRoll.STATUS_CURED)
+                .update(status=ClothRoll.STATUS_CURED)
+            )
+            if not moved:
+                raise serializers.ValidationError(
+                    {"status": "该布卷已被标为已固化，本次操作未生效"}
+                )
+            validated_data.pop("status")
+            instance.status = ClothRoll.STATUS_CURED
+        return super().update(instance, validated_data)
 
 
 class DipRunSerializer(serializers.ModelSerializer):

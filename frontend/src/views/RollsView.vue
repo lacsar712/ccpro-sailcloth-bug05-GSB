@@ -49,10 +49,14 @@ function resetForm() {
 async function save() {
   error.value = ''
   try {
+    const payload = { ...form }
     if (editing.value) {
-      await api.patch(`/rolls/${editing.value}/`, { ...form })
+      // 状态未变化时不随表单回传，避免把已固化卷的例行台账保存误判为重复固化
+      const row = rolls.value.find((r) => r.id === editing.value)
+      if (row && row.status === payload.status) delete payload.status
+      await api.patch(`/rolls/${editing.value}/`, payload)
     } else {
-      await api.post('/rolls/', { ...form })
+      await api.post('/rolls/', payload)
     }
     resetForm()
     await load()
