@@ -7,6 +7,7 @@ const rolls = ref([])
 const dips = ref([])
 const error = ref('')
 const panelError = ref('')
+const panelOk = ref('')
 const selectedId = ref(null)
 const panelBusy = ref(false)
 
@@ -60,6 +61,7 @@ async function load() {
 function openRoll(roll) {
   selectedId.value = roll.id
   panelError.value = ''
+  panelOk.value = ''
   dipForm.startedAt = localNow()
   dipForm.resinPct = 28
   dipForm.cureHours = ''
@@ -69,21 +71,24 @@ function openRoll(roll) {
 function closePanel() {
   selectedId.value = null
   panelError.value = ''
+  panelOk.value = ''
 }
 
 async function setStatus(status) {
   if (!selected.value) return
   panelError.value = ''
+  panelOk.value = ''
   panelBusy.value = true
   try {
     await api.patch(`/rolls/${selected.value.id}/`, { status })
     await load()
-    if (status === 'cured') {
-      panelError.value = '状态更新失败（标「已固化」需最近浸渍固化时长 ≥ 12 小时）'
-    }
+    panelOk.value = '状态已更新'
   } catch (e) {
     const data = e.response?.data
-    panelError.value = data?.status?.[0] ? '已更新' : (data?.detail || '已更新')
+    panelError.value =
+      data?.status?.[0] ||
+      data?.detail ||
+      '状态更新失败（标「已固化」需主管操作，且最近浸渍固化时长 ≥ 12 小时）'
     await load()
   } finally {
     panelBusy.value = false
@@ -93,6 +98,7 @@ async function setStatus(status) {
 async function logDip() {
   if (!selected.value) return
   panelError.value = ''
+  panelOk.value = ''
   panelBusy.value = true
   try {
     await api.post('/dips/', {
@@ -134,7 +140,7 @@ onMounted(load)
     <header class="rack-head">
       <div>
         <h1>帆布间晾晒架</h1>
-        <p class="sub">按帆布间挂卷；点选布卷登记浸渍或标固化。固化规则：最近浸渍时长 ≥ 12 小时。</p>
+        <p class="sub">按帆布间挂卷；点选布卷登记浸渍或标固化。固化规则：仅主管可标，且最近浸渍时长 ≥ 12 小时。</p>
       </div>
       <button class="btn secondary" type="button" @click="load">刷新架面</button>
     </header>
@@ -213,6 +219,7 @@ onMounted(load)
       </div>
       <p v-if="selected.notes" class="hint">{{ selected.notes }}</p>
       <p v-if="panelError" class="error">{{ panelError }}</p>
+      <p v-if="panelOk" class="ok">{{ panelOk }}</p>
 
       <div class="drawer-actions">
         <button

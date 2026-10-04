@@ -1,3 +1,4 @@
+from django.contrib.auth import get_user_model
 from rest_framework import serializers
 
 from .models import ClothRoll, DipRun, Loft
@@ -56,10 +57,16 @@ class ClothRollSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError(
                     {"status": "新建布卷不能直接设为已固化"}
                 )
+            if roll.status == ClothRoll.STATUS_CURED:
+                raise serializers.ValidationError(
+                    {"status": "该布卷已是「已固化」状态，请勿重复标记"}
+                )
             request = self.context.get("request")
             role = getattr(getattr(request, "user", None), "role", None)
-            if role == "admin":
-                raise serializers.ValidationError({"status": "管理员不能把卷标成已固化"})
+            if role != get_user_model().ROLE_ADMIN:
+                raise serializers.ValidationError(
+                    {"status": "仅主管（管理员）可将布卷标记为已固化，操作工无权固化"}
+                )
             ok, msg = can_mark_roll_cured(roll)
             if not ok:
                 raise serializers.ValidationError({"status": msg})
